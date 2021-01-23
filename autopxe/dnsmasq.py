@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import functools
 import subprocess
+import tempfile
 from dataclasses import asdict, dataclass
 from distutils.spawn import find_executable
 from logging import getLogger
-from typing import Any, Iterable, Optional, Protocol, Tuple
+from pathlib import Path
+from typing import Any, Iterable, Optional, Protocol, TextIO, Tuple
 
 LOG = getLogger(__name__)
 
@@ -42,6 +46,8 @@ class DnsMasq:
 
     def __post_init__(self):
         self.process: Optional[subprocess.Popen] = None
+        self.workdir: Optional[tempfile.TemporaryDirectory] = None
+        self.logs: Optional[TextIO] = None
 
     @functools.singledispatchmethod
     def format_option(self, value: Any, switch: str) -> Optional[str]:
@@ -70,15 +76,25 @@ class DnsMasq:
             if formatted := self.format_option(value, f"--{name.replace('_', '-')}"):
                 yield formatted
 
-    def __enter__(self) -> subprocess.Popen:
+    def __enter__(self) -> DnsMasq:
         """Launches the dnsmasq process and return its handle"""
         assert DNSMASQ
+        # Create the working directory
+        self.workdir = tempfile.TemporaryDirectory(prefix="autopxe-dnsmasq-")
+        # Override the "--log-facility" argument with our log file
+        self.log_facility = Path(self.workdir.name) / "dnsmasq.log"
+        # Dnsmasq needs it to exist
+        self.log_facility.touch()
         cmdline = (DNSMASQ, "-C", "/dev/null", *self.formatted_options)
         LOG.debug("running %s", " ".join(cmdline))
         self.process = subprocess.Popen(cmdline, text=True)
-        return self.process
+        # Open the logfile
+        self.logs = self.log_facility.open(mode="rt")
+        return self
 
     def __exit__(self, *args, **kwargs):
         """Stop dnsmasq"""
         self.process.terminate()
         self.process.wait()
+        self.logs.close()
+        self.workdir.cleanup()

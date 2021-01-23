@@ -44,9 +44,13 @@ class Pxe:
                              dhcp_range=(*self.dhcp_range, "1h"),
                              listen_address=self.server_address,
                              ) as dnsmasq:
-                    LOG.info("dnsmasq started with pid %d", dnsmasq.pid)
+                    LOG.info("dnsmasq started with pid %d", dnsmasq.process.pid)
                     try:
-                        dnsmasq.wait()
+                        while True:
+                            data = dnsmasq.logs.readline().strip()
+                            if data:
+                                LOG.debug("dnsmasq: %s", data)
+                        dnsmasq.process.wait()
                     except KeyboardInterrupt:
                         print("exiting")
-        LOG.info("dnsmasq exited with status %d", dnsmasq.poll())
+        LOG.info("dnsmasq exited with status %d", dnsmasq.process.poll())

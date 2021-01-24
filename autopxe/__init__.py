@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network
 from logging import getLogger
+from time import sleep
 from typing import Tuple
 
 from autopxe.distributions import Distribution
@@ -46,11 +47,11 @@ class Pxe:
                              ) as dnsmasq:
                     LOG.info("dnsmasq started with pid %d", dnsmasq.process.pid)
                     try:
-                        while True:
-                            data = dnsmasq.logs.readline().strip()
-                            if data:
-                                LOG.debug("dnsmasq: %s", data)
-                        dnsmasq.process.wait()
+                        while dnsmasq.process.poll() is None:
+                            dnsmasq.read_logs()
+                            sleep(.1)
                     except KeyboardInterrupt:
-                        print("exiting")
-        LOG.info("dnsmasq exited with status %d", dnsmasq.process.poll())
+                        dnsmasq.stop()
+                    # Read the last logs
+                    dnsmasq.read_logs()
+                LOG.info("dnsmasq exited with status %d", dnsmasq.process.poll())

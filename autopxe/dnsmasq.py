@@ -28,8 +28,6 @@ class DnsMasq:
 
     Option names closely match the actual dnsmasq options,
     except that the - is replaced by an underscore for obvious reasons.
-
-
     """
     interface: HasStr
     tftp_root: HasStr
@@ -94,7 +92,18 @@ class DnsMasq:
 
     def __exit__(self, *args, **kwargs):
         """Stop dnsmasq"""
-        self.process.terminate()
-        self.process.wait()
+        self.stop()
         self.logs.close()
         self.workdir.cleanup()
+
+    def stop(self):
+        """Stops and waits for the dnsmasq process if it's running"""
+        if self.process.poll() is None:
+            LOG.info("Stopping dnsmasq")
+            self.process.terminate()
+            self.process.wait()
+
+    def read_logs(self):
+        """Reads the logfile and logs it with DEBUG level"""
+        for line in filter(None, map(str.strip, self.logs.readlines())):
+            LOG.debug(line)

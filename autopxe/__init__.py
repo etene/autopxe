@@ -6,7 +6,8 @@ from typing import Tuple
 
 from autopxe.distributions import Distribution
 from autopxe.dnsmasq import DnsMasq
-from autopxe.networking import Interface, make_bridge
+from autopxe.iptables import masquerade
+from autopxe.networking import Interface, setup_iface
 
 LOG = getLogger(__name__)
 
@@ -20,6 +21,8 @@ class Pxe:
     pxe_iface: Interface
     # The network range to serve clients on
     pxe_net: IPv4Network
+    # Interface with internet, to masquerade on
+    masquerade_iface: Interface
     # How many clients can get an address
     dhcp_range_size: int = 20
 
@@ -34,24 +37,22 @@ class Pxe:
         return (first_addr := self.server_address + 1), first_addr + self.dhcp_range_size
 
     def run(self):
-        LOG.debug("Setting up & running %s", self)
-        with self.distribution.unpack() as tempdir:
-            LOG.info("%s unpacked to %s", self.distribution.name, tempdir)
-            with make_bridge(self.server_address, self.pxe_net.prefixlen) as br:
-                LOG.info("bridge %r set up successfully", br.name)
-                with DnsMasq(tftp_root=tempdir,
-                             interface=br.name,
-                             dhcp_boot=("pxelinux.0", "pxeserver", str(self.server_address)),
-                             dhcp_range=(*self.dhcp_range, "1h"),
-                             listen_address=self.server_address,
-                             ) as dnsmasq:
-                    LOG.info("dnsmasq started with pid %d", dnsmasq.process.pid)
-                    try:
-                        while dnsmasq.process.poll() is None:
-                            dnsmasq.read_logs()
-                            sleep(.1)
-                    except KeyboardInterrupt:
-                        dnsmasq.stop()
-                    # Read the last logs
-                    dnsmasq.read_logs()
-                LOG.info("dnsmasq exited with status %d", dnsmasq.process.poll())
+        with (self.distribution.unpack() as tempdir,
+              setup_iface(self.server_address, self.pxe_net.prefixlen, self.pxe_iface),
+              masquerade(),
+              ):
+            with DnsMasq(tftp_root=tempdir,
+                         interface=self.pxe_iface.name,
+                         dhcp_boot=("pxelinux.0", "pxeserver", str(self.server_address)),
+                         dhcp_range=(*self.dhcp_range, "1h"),
+                         listen_address=self.server_address,
+                         ) as dnsmasq:
+                try:
+                    while dnsmasq.running:
+                        dnsmasq.read_logs()
+                        sleep(.1)
+                except KeyboardInterrupt:
+                    dnsmasq.stop()
+                # Read the last logs
+                dnsmasq.read_logs()
+            LOG.info("dnsmasq exited with status %d", dnsmasq.process.poll())

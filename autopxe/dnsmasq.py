@@ -86,6 +86,7 @@ class DnsMasq:
         cmdline = (DNSMASQ, "-C", "/dev/null", *self.formatted_options)
         LOG.debug("running %s", " ".join(cmdline))
         self.process = subprocess.Popen(cmdline, text=True)
+        LOG.info("dnsmasq started with pid %d", self.process.pid)
         # Open the logfile
         self.logs = self.log_facility.open(mode="rt")
         return self
@@ -107,3 +108,8 @@ class DnsMasq:
         """Reads the logfile and logs it with DEBUG level"""
         for line in filter(None, map(str.strip, self.logs.readlines())):
             LOG.debug(line)
+
+    @property
+    def running(self) -> bool:
+        """Whether the dnsmasq process is still running"""
+        return self.process is not None and self.process.poll() is None

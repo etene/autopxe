@@ -45,7 +45,13 @@ class Distribution:
             cached_path.parent.mkdir(exist_ok=True, parents=True)
         if not cached_path.exists():
             LOG.info("Downloading %s", self.url)
-            urlretrieve(self.url, cached_path)
+
+            def report_cb(blocks: int, block_size: int, total_size: int):
+                print(end=".", flush=True)
+            # TODO does not cleanup if aborted
+            urlretrieve(self.url, cached_path, reporthook=report_cb)
+            print()
+        LOG.debug("Opening %s", cached_path)
         with tarfile.open(cached_path) as tar:
             # TODO check tar contents
             # FIXME gaping security hole esp since run as root
@@ -53,10 +59,11 @@ class Distribution:
 
     @contextmanager
     def unpack(self) -> Iterator[Path]:
-        """Unpacks the netboot archive to a temporary directory"""
+        """Unpacks the netboot archive to a temporary directory,
+        cleaned when the context manager exits"""
         with TemporaryDirectory("pxe") as td:
             with self.get_archive() as tar:
-                LOG.debug("Extracting %s to %s", tar.name, td)
+                LOG.info("Extracting %s to %s", self.name, td)
                 tar.extractall(path=td)
             yield Path(td)
 

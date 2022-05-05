@@ -30,6 +30,12 @@ def get_parser() -> argparse.ArgumentParser:
         help="private subnet to use for server & clients"
     )
     psr.add_argument(
+        "-m", "--masquerade-interface", metavar="NAME", type=networking.iface_lookup,
+        default=networking.get_default_iface(),
+        help="Interface with an internet connection to masquerade on, "
+             "so that clients have an internet connection.",
+    )
+    psr.add_argument(
         "--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING"), metavar="LEVEL",
         help="Verbosity for log messages"
     )
@@ -50,7 +56,11 @@ def main():
         psr.error("You must provide a distribution to install, "
                   "use -l to list them")
     if distribution := distros.get(args.distribution):
-        Pxe(distribution=distribution, pxe_iface=args.interface, pxe_net=args.network).run()
+        Pxe(distribution=distribution,
+            pxe_iface=args.interface,
+            pxe_net=args.network,
+            masquerade_iface=args.masquerade_interface,
+            ).run()
     else:
         psr.error(f"{args.distribution}: unknown distribution")  # TODO
 

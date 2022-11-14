@@ -39,6 +39,10 @@ def get_parser() -> argparse.ArgumentParser:
         "--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING"), metavar="LEVEL",
         help="Verbosity for log messages"
     )
+    psr.add_argument(
+        "-p", "--preseed-file", metavar="FILE", type=Path,
+        help="Preseed file for debian installer",
+    )
     psr.add_argument("distribution", help="Distribution to install", nargs="?")
     return psr
 
@@ -60,6 +64,7 @@ def main():
             pxe_iface=args.interface,
             pxe_net=args.network,
             masquerade_iface=args.masquerade_interface,
+            preseed_file=args.preseed_file,
             ).run()
     else:
         psr.error(f"{args.distribution}: unknown distribution")  # TODO

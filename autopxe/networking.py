@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from ipaddress import IPv4Address
 from logging import getLogger
 from socket import AddressFamily
-from typing import Any, Iterator, List, Mapping
+from typing import Any, Iterator, List, Mapping, Optional
 
 from pyroute2 import IPRoute
 from pyroute2.netlink.exceptions import NetlinkError
@@ -88,15 +88,18 @@ def get_wired_iface() -> Interface:
 
 
 @contextmanager
-def make_bridge(addr: IPv4Address, prefixlen: int, for_iface: Interface) -> Iterator[Interface]:
+def make_bridge(addr: IPv4Address,
+                prefixlen: int,
+                for_iface: Optional[Interface] = None,
+                name: str = "autopxe-temp-br") -> Iterator[Interface]:
     """Context manager that creates & returns a bridge"""
-    name = "autopxe-temp-br"  # TODO
     with IPRoute() as ipr:
         ipr.link("add", ifname=name, kind="bridge")
         iface: Interface = iface_lookup(name)
         ipr.addr("add", index=iface.index, address=str(addr), prefixlen=prefixlen)
         ipr.link("set", index=iface.index, state="up")
-        ipr.link("set", index=for_iface.index, master=iface.index)
+        if for_iface:
+            ipr.link("set", index=for_iface.index, master=iface.index)
         yield iface
         ipr.link("del", index=iface.index)
 
